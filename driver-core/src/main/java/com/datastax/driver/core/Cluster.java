@@ -437,6 +437,36 @@ public class Cluster implements Closeable {
     }
 
     /**
+     * Registers the provided listener to be updated with schema change events.
+     * <p>
+     * Registering the same listener multiple times is a no-op.
+     *
+     * @param listener the new {@link SchemaChangeListener} to register.
+     * @return this {@code Cluster} object;
+     */
+    public Cluster register(SchemaChangeListener listener) {
+        checkNotClosed(manager);
+        manager.schemaChangeListeners.add(listener);
+        return this;
+    }
+
+    /**
+     * Unregisters the provided schema change listener from being updated
+     * with schema change events.
+     * <p>
+     * This method is a no-op if {@code listener} hadn't previously be
+     * registered against this Cluster.
+     *
+     * @param listener the {@link SchemaChangeListener} to unregister.
+     * @return this {@code Cluster} object;
+     */
+    public Cluster unregister(SchemaChangeListener listener) {
+        checkNotClosed(manager);
+        manager.schemaChangeListeners.remove(listener);
+        return this;
+    }
+
+    /**
      * Initiates a shutdown of this cluster instance.
      * <p>
      * This method is asynchronous and return a future on the completion
@@ -1210,6 +1240,7 @@ public class Cluster implements Closeable {
 
         final Set<Host.StateListener> listeners;
         final Set<LatencyTracker> trackers = new CopyOnWriteArraySet<LatencyTracker>();
+        final Set<SchemaChangeListener> schemaChangeListeners = new  CopyOnWriteArraySet<SchemaChangeListener>();
 
         private Manager(String clusterName, List<InetSocketAddress> contactPoints, Configuration configuration, Collection<Host.StateListener> listeners) {
             this.clusterName = clusterName == null ? generateClusterName() : clusterName;
@@ -2177,15 +2208,34 @@ public class Cluster implements Closeable {
                                 submitSchemaRefresh(scc.keyspace, scc.table);
                             break;
                         case DROPPED:
-                            if (scc.table.isEmpty())
-                                manager.metadata.removeKeyspace(scc.keyspace);
-                            else {
+                            if (scc.table.isEmpty()) {
+                                final KeyspaceMetadata removed = manager.metadata.removeKeyspace(scc.keyspace);
+                                if(removed != null) {
+                                    executor.submit(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            for (TableMetadata t : removed.getTables())
+                                                manager.metadata.triggerOnTableRemoved(t);
+                                            manager.metadata.triggerOnKeyspaceRemoved(removed);
+                                        }
+                                    });
+                                }
+                            } else {
                                 KeyspaceMetadata keyspace = manager.metadata.getKeyspaceInternal(scc.keyspace);
                                 if (keyspace == null)
                                     logger.warn("Received a DROPPED notification for {}.{}, but this keyspace is unknown in our metadata",
                                         scc.keyspace, scc.table);
-                                else
-                                    keyspace.removeTable(scc.table);
+                                else {
+                                    final TableMetadata removed = keyspace.removeTable(scc.table);
+                                    if (removed != null) {
+                                        executor.submit(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                manager.metadata.triggerOnTableRemoved(removed);
+                                            }
+                                        });
+                                    }
+                                }
                             }
                             break;
                         case UPDATED:

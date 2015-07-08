@@ -93,28 +93,46 @@ public class Metadata {
                 String ksName = ksRow.getString(KeyspaceMetadata.KS_NAME);
                 KeyspaceMetadata ksm = KeyspaceMetadata.build(ksRow);
 
+                KeyspaceMetadata previousKsm = keyspaces.get(ksName);
+                if (previousKsm == null) {
+                    keyspaces.put(ksName, ksm);
+                    triggerOnKeyspaceAdded(ksm);
+                } else if (!previousKsm.equals(ksm)) {
+                    keyspaces.put(ksName, ksm);
+                    triggerOnKeyspaceChanged(ksm, previousKsm);
+                }
+
                 if (cfDefs.containsKey(ksName)) {
-                    buildTableMetadata(ksm, cfDefs.get(ksName), colsDefs.get(ksName), cassandraVersion);
+                    // this can trigger onTableAdded/Updated, so do it after triggering events for owning keyspace
+                    buildTableMetadata(ksm, null, cfDefs.get(ksName), colsDefs.get(ksName), cassandraVersion);
                 }
                 addedKs.add(ksName);
-                keyspaces.put(ksName, ksm);
+
             }
 
-            // If keyspace is null, it means we're rebuilding from scratch, so
-            // remove anything that was not just added as it means it's a dropped keyspace
-            if (keyspace == null) {
-                Iterator<String> iter = keyspaces.keySet().iterator();
-                while (iter.hasNext()) {
-                    if (!addedKs.contains(iter.next()))
-                        iter.remove();
+            Set<String> removedKs = new HashSet<String>();
+            for (String ksName : keyspaces.keySet()) {
+                // If keyspace is null, it means we're rebuilding from scratch;
+                // if not, it means we are rebuilding for a single keyspace.
+                // Either way, if addedKs does not contain the name of a keyspace currently in our metadata,
+                // it means it has been dropped.
+                if ((keyspace == null || keyspace.equals(ksName)) && !addedKs.contains(ksName)) {
+                    removedKs.add(ksName);
                 }
             }
+            for (String removed : removedKs) {
+                KeyspaceMetadata keyspaceOld = removeKeyspace(removed);
+                for (TableMetadata tableOld : keyspaceOld.getTables())
+                    triggerOnTableRemoved(tableOld);
+                triggerOnKeyspaceRemoved(keyspaceOld);
+            }
+
         } else {
             assert keyspace != null;
             KeyspaceMetadata ksm = keyspaces.get(keyspace);
 
             // If we update a keyspace we don't know about, something went
-            // wrong. Log an error an schedule a full schema rebuilt.
+            // wrong. Log an error and schedule a full schema rebuild.
             if (ksm == null) {
                 logger.error(String.format("Asked to rebuild table %s.%s but I don't know keyspace %s", keyspace, table, keyspace));
                 cluster.submitSchemaRefresh(null, null);
@@ -122,13 +140,15 @@ public class Metadata {
             }
 
             if (cfDefs.containsKey(keyspace))
-                buildTableMetadata(ksm, cfDefs.get(keyspace), colsDefs.get(keyspace), cassandraVersion);
+                buildTableMetadata(ksm, table, cfDefs.get(keyspace), colsDefs.get(keyspace), cassandraVersion);
         }
     }
 
-    private void buildTableMetadata(KeyspaceMetadata ksm, List<Row> cfRows, Map<String, Map<String, ColumnMetadata.Raw>> colsDefs, VersionNumber cassandraVersion) {
+    private void buildTableMetadata(KeyspaceMetadata ksm, String table, List<Row> cfRows, Map<String, Map<String, ColumnMetadata.Raw>> colsDefs, VersionNumber cassandraVersion) {
+        Set<String> addedCfs = new HashSet<String>();
         for (Row cfRow : cfRows) {
             String cfName = cfRow.getString(TableMetadata.CF_NAME);
+            addedCfs.add(cfName);
             try {
                 Map<String, ColumnMetadata.Raw> cols = colsDefs == null ? null : colsDefs.get(cfName);
                 if (cols == null || cols.isEmpty()) {
@@ -150,13 +170,73 @@ public class Metadata {
                         cols = Collections.<String, ColumnMetadata.Raw>emptyMap();
                     }
                 }
-                TableMetadata.build(ksm, cfRow, cols, cassandraVersion);
+
+                TableMetadata tm = TableMetadata.build(ksm, cfRow, cols, cassandraVersion);
+                TableMetadata tmPrevious = ksm.tables.get(tm.getName());
+                if (tmPrevious == null) {
+                    ksm.add(tm);
+                    triggerOnTableAdded(tm);
+                } else if (!tmPrevious.equals(tm)) {
+                    ksm.add(tm);
+                    triggerOnTableChanged(tm, tmPrevious);
+                }
+
             } catch (RuntimeException e) {
                 // See ControlConnection#refreshSchema for why we'd rather not probably this further
                 logger.error(String.format("Error parsing schema for table %s.%s: "
                                            + "Cluster.getMetadata().getKeyspace(\"%s\").getTable(\"%s\") will be missing or incomplete",
                                            ksm.getName(), cfName, ksm.getName(), cfName), e);
             }
+
+            Iterator<Map.Entry<String, TableMetadata>> iter = ksm.tables.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<String, TableMetadata> entry = iter.next();
+                // If table is null, it means we're rebuilding all tables for keyspace ksm;
+                // if not, it means we are rebuilding a single table inside keyspace ksm.
+                // Either way, if addedCfs does not contain the name of a table currently in this keyspace,
+                // it means it has been dropped.
+                if ((table == null || table.equals(entry.getKey())) && !addedCfs.contains(entry.getKey())) {
+                    triggerOnTableRemoved(entry.getValue());
+                    iter.remove();
+                }
+            }
+
+        }
+    }
+
+    void triggerOnKeyspaceAdded(KeyspaceMetadata keyspace) {
+        for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
+            listener.onKeyspaceAdded(keyspace);
+        }
+    }
+
+    void triggerOnKeyspaceChanged(KeyspaceMetadata current, KeyspaceMetadata previous) {
+        for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
+            listener.onKeyspaceChanged(current, previous);
+        }
+    }
+
+    void triggerOnKeyspaceRemoved(KeyspaceMetadata keyspace) {
+        for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
+            listener.onKeyspaceRemoved(keyspace);
+        }
+    }
+
+    void triggerOnTableAdded(TableMetadata table) {
+        for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
+            listener.onTableAdded(table);
+        }
+    }
+
+    void triggerOnTableChanged(TableMetadata current, TableMetadata previous) {
+        for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
+            listener.onTableChanged(current, previous);
+        }
+    }
+
+    void triggerOnTableRemoved(TableMetadata table) {
+        for (SchemaChangeListener listener : cluster.schemaChangeListeners) {
+            listener.onTableRemoved(table);
         }
     }
 
@@ -386,10 +466,11 @@ public class Metadata {
         return keyspaces.get(keyspace);
     }
 
-    void removeKeyspace(String keyspace) {
-        keyspaces.remove(keyspace);
+    KeyspaceMetadata removeKeyspace(String keyspace) {
+        KeyspaceMetadata removed = keyspaces.remove(keyspace);
         if (tokenMap != null)
             tokenMap.tokenToHosts.remove(keyspace);
+        return removed;
     }
 
     /**

@@ -26,6 +26,7 @@
 - [improvement] Provide API to retrieve values of a Parameterized SimpleStatement (JAVA-765)
 - [improvement] implement UPDATE ... IF EXISTS in QueryBuilder (JAVA-827)
 - [improvement] Randomize contact points list to prevent hotspots (JAVA-618)
+- [new feature] Make it possible to register for SchemaChange Events (JAVA-151)
 
 Merged from 2.0.10_fixes branch:
 
