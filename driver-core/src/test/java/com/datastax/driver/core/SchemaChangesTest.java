@@ -71,8 +71,22 @@ public class SchemaChangesTest {
     public void setup() throws InterruptedException {
         ccm = CCMBridge.builder("schemaChangesTest").withNodes(1).build();
 
-        cluster1 = Cluster.builder().addContactPoint(CCMBridge.ipOfNode(1)).build();
-        cluster2 = Cluster.builder().addContactPoint(CCMBridge.ipOfNode(1)).build();
+        cluster1 = Cluster.builder()
+            .addContactPoint(CCMBridge.ipOfNode(1))
+            .withQueryOptions(new QueryOptions()
+                .setRefreshNodeIntervalMillis(0)
+                .setRefreshNodeListIntervalMillis(0)
+                .setRefreshSchemaIntervalMillis(0)
+            )
+            .build();
+        cluster2 = Cluster.builder()
+            .addContactPoint(CCMBridge.ipOfNode(1))
+            .withQueryOptions(new QueryOptions()
+                .setRefreshNodeIntervalMillis(0)
+                .setRefreshNodeListIntervalMillis(0)
+                .setRefreshSchemaIntervalMillis(0)
+            )
+            .build();
 
         metadatas = Lists.newArrayList(cluster1.getMetadata(), cluster2.getMetadata());
 

@@ -27,6 +27,7 @@
 - [improvement] implement UPDATE ... IF EXISTS in QueryBuilder (JAVA-827)
 - [improvement] Randomize contact points list to prevent hotspots (JAVA-618)
 - [new feature] Make it possible to register for SchemaChange Events (JAVA-151)
+- [improvement] Debounce control connection queries (JAVA-657)
 
 Merged from 2.0.10_fixes branch:
 

@@ -15,12 +15,13 @@
  */
 package com.datastax.driver.core;
 
-import java.util.*;
-
 import org.testng.annotations.Test;
-import static org.testng.Assert.*;
 
-import static com.datastax.driver.core.TestUtils.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertNull;
+
+import static com.datastax.driver.core.TestUtils.CREATE_KEYSPACE_SIMPLE_FORMAT;
 
 public class CaseSensitivityTest {
 
@@ -36,11 +37,20 @@ public class CaseSensitivityTest {
 
     @Test(groups = "short")
     public void testCaseInsensitiveKeyspace() throws Throwable {
-        CCMBridge.CCMCluster c = CCMBridge.buildCluster(1, Cluster.builder());
+        CCMBridge.CCMCluster c = CCMBridge.buildCluster(1, Cluster.builder()
+            .withQueryOptions(new QueryOptions()
+                .setRefreshNodeIntervalMillis(0)
+                .setRefreshNodeListIntervalMillis(0)
+                .setRefreshSchemaIntervalMillis(0)
+            )
+        );
         Session s = c.session;
         try {
             String ksName = "MyKeyspace";
             s.execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, ksName, 1));
+
+            // give some time for schema events to be debounced
+            Thread.sleep(500);
 
             assertExists(c, ksName, "mykeyspace");
             assertExists(c, "mykeyspace", "mykeyspace");
@@ -56,12 +66,21 @@ public class CaseSensitivityTest {
 
     @Test(groups = "short")
     public void testCaseSensitiveKeyspace() throws Throwable {
-        CCMBridge.CCMCluster c = CCMBridge.buildCluster(1, Cluster.builder());
+        CCMBridge.CCMCluster c = CCMBridge.buildCluster(1, Cluster.builder()
+            .withQueryOptions(new QueryOptions()
+                .setRefreshNodeIntervalMillis(0)
+                .setRefreshNodeListIntervalMillis(0)
+                .setRefreshSchemaIntervalMillis(0)
+            )
+        );
         Session s = c.session;
         try {
             String ksName = "\"MyKeyspace\"";
             s.execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, ksName, 1));
 
+            // give some time for schema events to be debounced
+            Thread.sleep(500);
+            
             assertExists(c, ksName, "MyKeyspace");
             assertExists(c, Metadata.quote("MyKeyspace"), "MyKeyspace");
             assertNotExists(c, "mykeyspace");

@@ -40,6 +40,22 @@ public class QueryBuilderITest extends CCMBridge.PerClassSingleNodeCluster {
                              String.format("CREATE TABLE %s (k int PRIMARY KEY, a int, b int)", TABLE_INT));
     }
 
+    @Override
+    protected Cluster.Builder configure(Cluster.Builder builder) {
+        return builder.withQueryOptions(new QueryOptions()
+            .setRefreshNodeIntervalMillis(0)
+            .setRefreshNodeListIntervalMillis(0)
+            .setRefreshSchemaIntervalMillis(0)
+        );
+    }
+
+    @Override
+    protected void initKeyspace() throws InterruptedException {
+        super.initKeyspace();
+        // give some time for schema events to be debounced
+        Thread.sleep(500);
+    }
+
     @Test(groups = "short")
     public void remainingDeleteTests() throws Exception {
 

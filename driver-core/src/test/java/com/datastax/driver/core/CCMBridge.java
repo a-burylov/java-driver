@@ -425,7 +425,7 @@ public class CCMBridge {
         }
 
         @BeforeClass(groups = { "short", "long" })
-        public void beforeClass() {
+        public void beforeClass() throws InterruptedException {
             maybeInitCluster();
             initKeyspace();
         }
@@ -441,7 +441,7 @@ public class CCMBridge {
             }
         }
 
-        private void maybeInitCluster(){
+        protected void maybeInitCluster(){
             if (!clusterInitialized){
                 try {
                     //launch ccm cluster
@@ -468,8 +468,7 @@ public class CCMBridge {
 
         }
 
-
-        private void initKeyspace() {
+        protected void initKeyspace() throws InterruptedException {
             try {
                 Cluster.Builder builder = Cluster.builder();
 
