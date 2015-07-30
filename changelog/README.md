@@ -23,6 +23,7 @@
 - [bug] Preserve tracing across retries (JAVA-815)
 - [improvement] New RetryDecision.tryNextHost() (JAVA-709)
 - [bug] Handle function calls and raw strings as non-idempotent in QueryBuilder (JAVA-733)
+- [improvement] Allow hosts to remain partially up (JAVA-544)
 
 Merged from 2.0.10_fixes branch:
 
