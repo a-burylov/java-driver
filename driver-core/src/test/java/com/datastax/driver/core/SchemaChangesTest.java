@@ -16,6 +16,8 @@
 package com.datastax.driver.core;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -38,6 +40,7 @@ import com.datastax.driver.core.utils.Bytes;
 
 import static com.datastax.driver.core.Assertions.assertThat;
 import static com.datastax.driver.core.Metadata.handleId;
+import static com.datastax.driver.core.SchemaChangesTest.EventType.*;
 
 public class SchemaChangesTest {
 
@@ -74,13 +77,13 @@ public class SchemaChangesTest {
         metadatas = Lists.newArrayList(cluster1.getMetadata(), cluster2.getMetadata());
 
         session = cluster1.connect();
-        
+
         cluster1.register(listener1 = spy(new SchemaChangeTestListener()));
         cluster1.register(listener2 = spy(new SchemaChangeTestListener()));
         listeners = Lists.newArrayList(listener1, listener2);
 
-        execute(CREATE_KEYSPACE, "lowercase");
-        execute(CREATE_KEYSPACE, "\"CaseSensitive\"");
+        execute(CREATE_KEYSPACE, "lowercase", KS_ADDED);
+        execute(CREATE_KEYSPACE, "\"CaseSensitive\"", KS_ADDED);
 
     }
 
@@ -114,7 +117,7 @@ public class SchemaChangesTest {
 
     @Test(groups = "short", dataProvider = "existingKeyspaceName")
     public void should_notify_of_table_creation(String keyspace) throws InterruptedException {
-        execute(CREATE_TABLE, keyspace);
+        execute(CREATE_TABLE, keyspace, TABLE_ADDED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace).getTable("table1")).isNotNull();
         for (SchemaChangeTestListener listener : listeners) {
@@ -128,10 +131,10 @@ public class SchemaChangesTest {
 
     @Test(groups = "short", dataProvider = "existingKeyspaceName")
     public void should_notify_of_table_update(String keyspace) throws InterruptedException {
-        execute(CREATE_TABLE, keyspace);
+        execute(CREATE_TABLE, keyspace, TABLE_ADDED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace).getTable("table1").getColumn("j")).isNull();
-        execute(ALTER_TABLE, keyspace);
+        execute(ALTER_TABLE, keyspace, TABLE_UPDATED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace).getTable("table1").getColumn("j")).isNotNull();
         for (SchemaChangeListener listener : listeners) {
@@ -152,8 +155,8 @@ public class SchemaChangesTest {
 
     @Test(groups = "short", dataProvider = "existingKeyspaceName")
     public void should_notify_of_table_drop(String keyspace) throws InterruptedException {
-        execute(CREATE_TABLE, keyspace);
-        execute(DROP_TABLE, keyspace);
+        execute(CREATE_TABLE, keyspace, TABLE_ADDED);
+        execute(DROP_TABLE, keyspace, TABLE_REMOVED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace).getTable("table1")).isNull();
         for (SchemaChangeListener listener : listeners) {
@@ -169,7 +172,7 @@ public class SchemaChangesTest {
 
     @Test(groups = "short", dataProvider = "newKeyspaceName")
     public void should_notify_of_keyspace_creation(String keyspace) throws InterruptedException {
-        execute(CREATE_KEYSPACE, keyspace);
+        execute(CREATE_KEYSPACE, keyspace, KS_ADDED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace)).isNotNull();
         for (SchemaChangeListener listener : listeners) {
@@ -181,10 +184,10 @@ public class SchemaChangesTest {
 
     @Test(groups = "short", dataProvider = "newKeyspaceName")
     public void should_notify_of_keyspace_update(String keyspace) throws InterruptedException {
-        execute(CREATE_KEYSPACE, keyspace);
+        execute(CREATE_KEYSPACE, keyspace, KS_ADDED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace).isDurableWrites()).isTrue();
-        execute(ALTER_KEYSPACE, keyspace);
+        execute(ALTER_KEYSPACE, keyspace, KS_UPDATED);
         for (Metadata m : metadatas)
             assertThat(m.getKeyspace(keyspace).isDurableWrites()).isFalse();
         for (SchemaChangeListener listener : listeners) {
@@ -203,11 +206,12 @@ public class SchemaChangesTest {
 
     @Test(groups = "short", dataProvider = "newKeyspaceName")
     public void should_notify_of_keyspace_drop(String keyspace) throws InterruptedException {
-        execute(CREATE_KEYSPACE, keyspace);
+        execute(CREATE_KEYSPACE, keyspace, KS_ADDED);
+        //        Thread.sleep(5000);
         for (Metadata m : metadatas)
             assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isNotEmpty();
-        execute(CREATE_TABLE, keyspace); // to test table drop notifications
-        execute(DROP_KEYSPACE, keyspace);
+        execute(CREATE_TABLE, keyspace, TABLE_ADDED); // to test table drop notifications
+        execute(DROP_KEYSPACE, keyspace, KS_REMOVED);
         for (Metadata m : metadatas) {
             assertThat(m.getKeyspace(keyspace)).isNull();
             assertThat(m.getReplicas(keyspace, Bytes.fromHexString("0xCAFEBABE"))).isEmpty();
@@ -234,28 +238,40 @@ public class SchemaChangesTest {
         Futures.getUnchecked(f);
     }
 
-    private void execute(String cql, String keyspace) throws InterruptedException {
+    private void execute(String cql, String keyspace, EventType eventType) throws InterruptedException {
         session.execute(String.format(cql, keyspace));
         for (SchemaChangeTestListener listener : listeners)
-            listener.await(1);
+            listener.await(eventType, 1);
+    }
+
+    enum EventType {
+        KS_ADDED, KS_REMOVED, KS_UPDATED,
+        TABLE_ADDED, TABLE_REMOVED, TABLE_UPDATED
     }
 
     class SchemaChangeTestListener implements SchemaChangeListener {
 
-        final AtomicInteger counter = new AtomicInteger(0);
+        final Map<EventType, AtomicInteger> counters = new ConcurrentHashMap<EventType, AtomicInteger>();
 
         final Lock lock = new ReentrantLock();
 
         final Condition cond = lock.newCondition();
 
-        void reset() {
-            counter.set(0);
+        SchemaChangeTestListener() {
+            reset();
         }
 
-        void await(int events) throws InterruptedException {
+        void reset() {
+            for (EventType eventType : EventType.values()) {
+                counters.put(eventType, new AtomicInteger(0));
+            }
+        }
+
+        void await(EventType eventType, int events) throws InterruptedException {
             long nanos = SECONDS.toNanos(10);
             lock.lock();
             try {
+                AtomicInteger counter = counters.get(eventType);
                 while (counter.get() < events) {
                     if (nanos <= 0L) break; // timeout
                     nanos = cond.awaitNanos(nanos);
@@ -265,10 +281,10 @@ public class SchemaChangesTest {
             }
         }
 
-        void eventReceived() {
+        void eventReceived(EventType eventType) {
             lock.lock();
             try {
-                counter.incrementAndGet();
+                counters.get(eventType).incrementAndGet();
                 cond.signal();
             } finally {
                 lock.unlock();
@@ -277,32 +293,32 @@ public class SchemaChangesTest {
 
         @Override
         public void onKeyspaceAdded(KeyspaceMetadata keyspace) {
-            eventReceived();
+            eventReceived(KS_ADDED);
         }
 
         @Override
         public void onKeyspaceRemoved(KeyspaceMetadata keyspace) {
-            eventReceived();
+            eventReceived(EventType.KS_REMOVED);
         }
 
         @Override
         public void onKeyspaceChanged(KeyspaceMetadata current, KeyspaceMetadata previous) {
-            eventReceived();
+            eventReceived(EventType.KS_UPDATED);
         }
 
         @Override
         public void onTableAdded(TableMetadata table) {
-            eventReceived();
+            eventReceived(EventType.TABLE_ADDED);
         }
 
         @Override
         public void onTableRemoved(TableMetadata table) {
-            eventReceived();
+            eventReceived(EventType.TABLE_REMOVED);
         }
 
         @Override
         public void onTableChanged(TableMetadata current, TableMetadata previous) {
-            eventReceived();
+            eventReceived(EventType.TABLE_UPDATED);
         }
 
     }
