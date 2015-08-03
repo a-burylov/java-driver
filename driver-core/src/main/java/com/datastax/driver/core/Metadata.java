@@ -93,11 +93,6 @@ public class Metadata {
                 String ksName = ksRow.getString(KeyspaceMetadata.KS_NAME);
                 KeyspaceMetadata ksm = KeyspaceMetadata.build(ksRow);
 
-                if (cfDefs.containsKey(ksName)) {
-                    buildTableMetadata(ksm, null, cfDefs.get(ksName), colsDefs.get(ksName), cassandraVersion);
-                }
-                addedKs.add(ksName);
-
                 KeyspaceMetadata previousKsm = keyspaces.get(ksName);
                 if (previousKsm == null) {
                     keyspaces.put(ksName, ksm);
@@ -106,6 +101,13 @@ public class Metadata {
                     keyspaces.put(ksName, ksm);
                     triggerOnKeyspaceChanged(ksm, previousKsm);
                 }
+
+                if (cfDefs.containsKey(ksName)) {
+                    // this can trigger onTableAdded/Updated, so do it after triggering events for owning keyspace
+                    buildTableMetadata(ksm, null, cfDefs.get(ksName), colsDefs.get(ksName), cassandraVersion);
+                }
+                addedKs.add(ksName);
+
             }
 
             Set<String> removedKs = new HashSet<String>();
