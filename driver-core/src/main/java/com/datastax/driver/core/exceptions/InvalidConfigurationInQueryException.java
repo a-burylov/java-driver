@@ -44,20 +44,18 @@ public class InvalidConfigurationInQueryException extends InvalidQueryException 
         this.address = address;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public InetAddress getHost() {
         return address.getAddress();
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     public InetSocketAddress getAddress() {
         return address;
     }
 
+    @Override
+    public InvalidConfigurationInQueryException copy() {
+        return new InvalidConfigurationInQueryException(address, getMessage());
+    }
 }
