@@ -29,8 +29,6 @@ public class InvalidConfigurationInQueryException extends InvalidQueryException 
 
     private static final long serialVersionUID = 0;
 
-    private final InetSocketAddress address;
-
     /**
      * @deprecated This constructor is kept for backwards compatibility.
      */
@@ -40,22 +38,11 @@ public class InvalidConfigurationInQueryException extends InvalidQueryException 
     }
 
     public InvalidConfigurationInQueryException(InetSocketAddress address, String msg) {
-        super(msg);
-        this.address = address;
-    }
-
-    @Override
-    public InetAddress getHost() {
-        return address.getAddress();
-    }
-
-    @Override
-    public InetSocketAddress getAddress() {
-        return address;
+        super(address, msg);
     }
 
     @Override
     public InvalidConfigurationInQueryException copy() {
-        return new InvalidConfigurationInQueryException(address, getMessage());
+        return new InvalidConfigurationInQueryException(getAddress(), getMessage());
     }
 }

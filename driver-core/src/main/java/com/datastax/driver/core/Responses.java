@@ -93,7 +93,7 @@ class Responses {
                 case READ_TIMEOUT:     return ((ReadTimeoutException)infos).copy(host);
                 case SYNTAX_ERROR:     return new SyntaxError(host, message);
                 case UNAUTHORIZED:     return new UnauthorizedException(host, message);
-                case INVALID:          return new InvalidQueryException(message);
+                case INVALID:          return new InvalidQueryException(host, message);
                 case CONFIG_ERROR:     return new InvalidConfigurationInQueryException(host, message);
                 case ALREADY_EXISTS:   return ((AlreadyExistsException)infos).copy(host);
                 case UNPREPARED:       return new UnpreparedException(host, message);
