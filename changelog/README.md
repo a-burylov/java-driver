@@ -28,6 +28,7 @@
 - [improvement] Randomize contact points list to prevent hotspots (JAVA-618)
 - [new feature] Make it possible to register for SchemaChange Events (JAVA-151)
 - [improvement] Debounce control connection queries (JAVA-657)
+- [bug] LoadBalancingPolicy.distance() called before init() (JAVA-784)
 
 Merged from 2.0.10_fixes branch:
 

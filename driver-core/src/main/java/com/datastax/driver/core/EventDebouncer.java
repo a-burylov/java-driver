@@ -135,7 +135,7 @@ class EventDebouncer<T> {
     }
 
     private void scheduleNewDelivery() {
-        while (!stopped) {
+        while (isRunning()) {
             DeliveryAttempt previous = cancelPendingDelivery();
             DeliveryAttempt next = new DeliveryAttempt();
             if (pendingDelivery.compareAndSet(previous, next)) {
@@ -143,6 +143,10 @@ class EventDebouncer<T> {
                 break;
             }
         }
+    }
+
+    private boolean isRunning() {
+        return started.getCount() == 0 && !stopped;
     }
 
     private void deliverEvents() throws InterruptedException {
