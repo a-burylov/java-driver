@@ -40,13 +40,6 @@ public class SchemaTest extends CCMBridge.PerClassSingleNodeCluster {
     }
 
     @Override
-    protected void initKeyspace() throws InterruptedException {
-        super.initKeyspace();
-        // give some time for schema events to be debounced
-        Thread.sleep(500);
-    }
-
-    @Override
     protected Collection<String> getTableDefinitions() {
 
         String sparse = String.format("CREATE TABLE %s.sparse (\n"

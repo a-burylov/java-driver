@@ -71,7 +71,7 @@ public abstract class TokenIntegrationTest {
     }
 
     @BeforeClass(groups = "short")
-    public void setup() throws InterruptedException {
+    public void setup() {
         ccm = CCMBridge.builder("test").withNodes(3).withStartOptions(ccmOptions).build();
 
         // Only connect to node 1, which makes it easier to query system tables in should_expose_tokens_per_host()
@@ -92,9 +92,6 @@ public abstract class TokenIntegrationTest {
 
         for (String statement : schema)
             session.execute(statement);
-
-        // give some time for schema events to be debounced
-        Thread.sleep(1000);
     }
 
     @AfterClass(groups = "short", alwaysRun=true)

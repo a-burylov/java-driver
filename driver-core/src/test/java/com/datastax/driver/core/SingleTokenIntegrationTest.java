@@ -29,7 +29,7 @@ public class SingleTokenIntegrationTest {
      * JAVA-684: Empty TokenRange returned in a one token cluster
      */
     @Test(groups = "short")
-    public void should_return_single_non_empty_range_when_cluster_has_one_single_token() throws InterruptedException {
+    public void should_return_single_non_empty_range_when_cluster_has_one_single_token() {
         CCMBridge ccm = null;
         Cluster cluster = null;
 
@@ -50,9 +50,6 @@ public class SingleTokenIntegrationTest {
 
             Session session = cluster.connect();
             session.execute("create keyspace test with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}");
-
-            // give some time for schema events to be debounced
-            Thread.sleep(500);
 
             Metadata metadata = cluster.getMetadata();
 

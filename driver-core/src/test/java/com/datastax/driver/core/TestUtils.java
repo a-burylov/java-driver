@@ -24,13 +24,14 @@ import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.util.*;
 
-import static org.testng.Assert.fail;
-
+import com.google.common.util.concurrent.Futures;
 import org.scassandra.Scassandra;
 import org.scassandra.ScassandraFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.SkipException;
+
+import static org.testng.Assert.fail;
 
 import com.datastax.driver.core.policies.RoundRobinPolicy;
 import com.datastax.driver.core.policies.WhiteListPolicy;
@@ -325,8 +326,10 @@ public abstract class TestUtils {
         // tried doing an actual query, the driver won't realize that last node is dead until
         // keep alive kicks in, but that's a fairly long time. So we cheat and trigger a force
         // the detection by forcing a request.
-        if (waitForDead || waitForOut)
+        if (waitForDead || waitForOut) {
             cluster.manager.submitSchemaRefresh(null, null);
+            Futures.getUnchecked(cluster.manager.schemaRefreshRequestDebouncer.deliverEvents());
+        }
 
         InetAddress address;
         try {

@@ -41,13 +41,6 @@ public class TableMetadataTest extends CCMBridge.PerClassSingleNodeCluster {
         );
     }
 
-    @Override
-    protected void initKeyspace() throws InterruptedException {
-        super.initKeyspace();
-        // give some time for schema events to be debounced
-        Thread.sleep(500);
-    }
-    
     @Test(groups = "short")
     public void should_escape_single_quote_table_comment() {
         TableMetadata table = cluster.getMetadata().getKeyspace(keyspace).getTable("single_quote");

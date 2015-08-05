@@ -49,13 +49,6 @@ public class QueryBuilderITest extends CCMBridge.PerClassSingleNodeCluster {
         );
     }
 
-    @Override
-    protected void initKeyspace() throws InterruptedException {
-        super.initKeyspace();
-        // give some time for schema events to be debounced
-        Thread.sleep(500);
-    }
-
     @Test(groups = "short")
     public void remainingDeleteTests() throws Exception {
 

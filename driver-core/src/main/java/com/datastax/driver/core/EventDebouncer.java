@@ -21,6 +21,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.google.common.util.concurrent.Futures;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -149,9 +150,9 @@ class EventDebouncer<T> {
         return started.getCount() == 0 && !stopped;
     }
 
-    private void deliverEvents() throws InterruptedException {
+    Future<?> deliverEvents() {
         if(stopped) {
-            return;
+            return Futures.immediateFuture(null);
         }
         final List<T> events = new ArrayList<T>();
         int drained;
@@ -163,10 +164,11 @@ class EventDebouncer<T> {
         }
         if (drained > 0) {
             logger.trace("{} debouncer: delivering {} events", name, drained);
-            callback.deliver(events);
+            return callback.deliver(events);
         } else {
             logger.trace("{} debouncer: no events to deliver", name);
         }
+        return Futures.immediateFuture(null);
     }
 
     class DeliveryAttempt extends ExceptionCatchingRunnable {
@@ -199,7 +201,7 @@ class EventDebouncer<T> {
          *
          * @param events the events to deliver
          */
-        void deliver(List<T> events);
+        Future<?> deliver(List<T> events);
 
     }
 }

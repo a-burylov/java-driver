@@ -49,9 +49,6 @@ public class CaseSensitivityTest {
             String ksName = "MyKeyspace";
             s.execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, ksName, 1));
 
-            // give some time for schema events to be debounced
-            Thread.sleep(500);
-
             assertExists(c, ksName, "mykeyspace");
             assertExists(c, "mykeyspace", "mykeyspace");
             assertExists(c, "MYKEYSPACE", "mykeyspace");
@@ -78,9 +75,6 @@ public class CaseSensitivityTest {
             String ksName = "\"MyKeyspace\"";
             s.execute(String.format(CREATE_KEYSPACE_SIMPLE_FORMAT, ksName, 1));
 
-            // give some time for schema events to be debounced
-            Thread.sleep(500);
-            
             assertExists(c, ksName, "MyKeyspace");
             assertExists(c, Metadata.quote("MyKeyspace"), "MyKeyspace");
             assertNotExists(c, "mykeyspace");

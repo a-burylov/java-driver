@@ -48,13 +48,6 @@ public class QueryBuilderRoutingKeyTest extends CCMBridge.PerClassSingleNodeClus
         );
     }
 
-    @Override
-    protected void initKeyspace() throws InterruptedException {
-        super.initKeyspace();
-        // give some time for schema events to be debounced
-        Thread.sleep(500);
-    }
-
     @Test(groups = "short")
     public void textRoutingKeyTest() throws Exception {
 
