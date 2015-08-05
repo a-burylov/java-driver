@@ -295,8 +295,10 @@ class ControlConnection implements Host.StateListener {
             refreshSchema(c, keyspace, table, cluster);
             // If the table is null, we either rebuild all from scratch or have an updated keyspace. In both cases, rebuild the token map
             // since some replication on some keyspace may have changed
-            if (table == null)
+            if (table == null) {
                 cluster.submitNodeListRefresh();
+                cluster.nodeListRefreshRequestDebouncer.deliverEvents().get();
+            }
         } catch (ConnectionException e) {
             logger.debug("[Control connection] Connection error while refreshing schema ({})", e.getMessage());
             signalError();

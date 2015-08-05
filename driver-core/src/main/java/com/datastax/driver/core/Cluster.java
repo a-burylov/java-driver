@@ -2121,11 +2121,6 @@ public class Cluster implements Closeable {
                             submitSchemaRefresh(keyspace, table);
                             // force synchronous schema refresh
                             Uninterruptibles.getUninterruptibly(schemaRefreshRequestDebouncer.deliverEvents());
-                            if (table == null) {
-                                // if table is null, a node list refresh request has also been made
-                                // force synchronous delivery now
-                                Uninterruptibles.getUninterruptibly(nodeListRefreshRequestDebouncer.deliverEvents());
-                            }
                         }
                     } catch (Exception e) {
                         if (refreshSchema) {
